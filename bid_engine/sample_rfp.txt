@@ -1,0 +1,36 @@
+REQUEST FOR PROPOSAL
+Government of Pakistan – National IT Board
+
+PROJECT TITLE: Enterprise Resource Planning (ERP) System for Federal Ministry
+
+ISSUING AUTHORITY: National IT Board, Ministry of IT & Telecom
+SUBMISSION DEADLINE: 30 August 2026
+ESTIMATED BUDGET: PKR 85 Million
+
+1. BACKGROUND
+The Federal Ministry requires a comprehensive ERP system to manage HR, Finance, Procurement, and Asset Management modules across 12 departments.
+
+2. MANDATORY REQUIREMENTS
+- The vendor MUST hold ISO 9001:2015 and ISO 27001 certifications.
+- The vendor SHALL have completed at least 3 similar ERP projects for government clients.
+- The proposed solution MUST be cloud-hosted with 99.9% uptime SLA.
+- All data MUST be stored on local servers within Pakistan in compliance with data sovereignty laws.
+- The vendor MUST provide a dedicated project manager with PMP certification.
+- Source code MUST be handed over to the Ministry upon project completion.
+
+3. EVALUATION CRITERIA
+- Technical Approach and Methodology: 35%
+- Relevant Experience and Past Projects: 25%
+- Team Qualifications and CVs: 20%
+- Financial Proposal / Price: 20%
+
+4. SCOPE OF WORK
+Vendors are required to respond to the following sections:
+- Describe your proposed ERP architecture and technology stack.
+- Provide case studies of at least 3 completed government ERP deployments.
+- Submit CVs of the Project Manager and Lead Developer.
+- Provide a detailed implementation timeline (maximum 18 months).
+- Describe your post-go-live support and maintenance plan.
+
+5. SUBMISSION REQUIREMENTS
+Proposals must be submitted in hard copy (3 copies) and soft copy (USB drive) to the National IT Board office by the deadline.
