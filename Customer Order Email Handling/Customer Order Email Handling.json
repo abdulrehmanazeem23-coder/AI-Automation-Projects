@@ -1,0 +1,208 @@
+{
+  "name": "Customer Order Email Handling",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1DbAynkvbS5rLkrzNY20uhOE3CeaaaE6wRkQEXp9GKbs",
+          "mode": "list",
+          "cachedResultName": "Customer Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DbAynkvbS5rLkrzNY20uhOE3CeaaaE6wRkQEXp9GKbs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DbAynkvbS5rLkrzNY20uhOE3CeaaaE6wRkQEXp9GKbs/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        0
+      ],
+      "id": "56e1e76b-7ec7-4bce-9ada-625d69b2ad11",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "LfAW9GVvbEMqdTbt",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a Customer Success Coordinator. Review the order data below and generate an internal email summary for the fulfillment team.\n\nRules:\n- Respond ONLY with a raw JSON object — no markdown, no code fences, no explanation, no preamble.\n- The JSON must have exactly two keys: \"subject\" and \"body\".\n- \"subject\": a short, descriptive email subject line.\n- \"body\": the full plain-text email body with order summary, signed off as 'Customer Success Team'.\n\nOrder Data:\nOrder ID: {{ $json.OrderID }}\nCustomer Name: {{ $json.CustomerName }}\nProduct: {{ $json.Product }}\nQuantity: {{ $json.Quantity }}\nPrice: {{ $json.Price }}\nOrder Date: {{ $json.FormattedOrderDate }}\nStatus: {{ $json.Status }}\n\nRespond with ONLY this structure and nothing else:\n{\"subject\": \"...\", \"body\": \"...\"}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        256,
+        0
+      ],
+      "id": "b63722ce-a0be-474f-b7b2-f97cc821025e",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sendTo": "abdulrehmanazeem23@gmail.com",
+        "subject": "={{ $json['Email Subject'] }}",
+        "emailType": "text",
+        "message": "={{ $json['Email Body'] }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        0
+      ],
+      "id": "a706d40f-b21d-428f-8477-0ca9df1274a4",
+      "name": "Send a message",
+      "webhookId": "f960f4dd-c5d7-414b-8cc0-677e4d79ea85",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LaWhUKNIxgCZhskJ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        224
+      ],
+      "id": "88bc03c4-043f-4a9e-a1c9-144bee25f8d3",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "knvaUw1oWLf08ZXv",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfor (const item of $input.all()) {\n  let raw = (item.json.output || '').trim();\n\n  // Strip markdown code fences if the model wraps output in ```json ... ```\n  raw = raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\n  let parsed;\n  try {\n    parsed = JSON.parse(raw);\n  } catch (e) {\n    // Fallback: regex extraction if JSON parse fails\n    const subjectMatch = raw.match(/\"subject\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\[\\s\\S])*)\"/i);\n    const bodyMatch = raw.match(/\"body\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\[\\s\\S])*)\"/i);\n    parsed = {\n      'Email Subject': subjectMatch ? subjectMatch[1].replace(/\\\\n/g, '\\n') : 'No subject',\n      'Email Body': bodyMatch ? bodyMatch[1].replace(/\\\\n/g, '\\n') : raw\n    };\n  }\n\n  items.push({\n    json: {\n      'Email Subject': parsed.subject || '',\n      'Email Body': parsed.body || ''\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "parse-json-node-001",
+      "name": "Parse Subject & Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfunction getOrdinal(day) {\n  if (day >= 11 && day <= 13) return day + 'th';\n  switch (day % 10) {\n    case 1: return day + 'st';\n    case 2: return day + 'nd';\n    case 3: return day + 'rd';\n    default: return day + 'th';\n  }\n}\n\nconst monthNames = [\n  'January','February','March','April','May','June',\n  'July','August','September','October','November','December'\n];\n\nfor (const item of $input.all()) {\n  const raw = item.json.OrderDate;\n  let formatted = raw;\n\n  const serial = Number(raw);\n  if (!isNaN(serial) && serial > 1000) {\n    // Google Sheets epoch: December 30, 1899\n    const date = new Date((serial - 25569) * 86400 * 1000);\n    const day = date.getUTCDate();\n    const month = monthNames[date.getUTCMonth()];\n    const year = date.getUTCFullYear();\n    formatted = `${month} ${getOrdinal(day)} ${year}`;\n  } else if (raw) {\n    // Already a string date — parse and reformat\n    const date = new Date(raw);\n    if (!isNaN(date.getTime())) {\n      const day = date.getUTCDate();\n      const month = monthNames[date.getUTCMonth()];\n      const year = date.getUTCFullYear();\n      formatted = `${month} ${getOrdinal(day)} ${year}`;\n    }\n  }\n\n  items.push({\n    json: {\n      ...item.json,\n      FormattedOrderDate: formatted\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "date-format-node-001",
+      "name": "Format Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Subject & Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Subject & Body": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Date": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "df2b4c2a-4746-4a1a-b697-219ed110f96e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "V3A08XF64Rr6JJrb",
+  "tags": []
+}
