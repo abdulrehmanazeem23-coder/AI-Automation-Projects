@@ -1,0 +1,263 @@
+{
+  "name": "Nike/Wikipedia Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a smart, friendly assistant. 🤖 Always use emojis — never send plain text.\n\n🎯 YOUR JOB: Answer the user's question using the `database` tool (uploaded documents) and `wikipedia` (general knowledge). Use whichever is relevant, or both.\n\n🔍 TOOL USAGE:\n1. Pick the right tool based on the question\n2. Search with a focused, specific query\n3. Extract only what directly answers the question\n4. Try up to 3 different queries if needed\n- Answer precisely — don't dump raw chunks\n- Only cover what was asked\n\n💬 RESPONSE FORMAT:\n- Answer directly first 🎯\n- Support with key data 📊\n- Bold important figures, use bullet points\n- Emojis throughout 🎉\n- End with a follow-up invitation 🙌"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        256,
+        -16
+      ],
+      "id": "a848d9f2-f899-4923-9166-a77dc783aa34",
+      "name": "Nike Agent"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        144,
+        224
+      ],
+      "id": "25df7187-68a3-4559-8316-846a3b655d77",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "hMAHLfkRnqL9NFQ1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        272,
+        224
+      ],
+      "id": "2dddf7e7-f5ea-439d-9f01-04522168046d",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "database",
+        "toolDescription": "Call this tool to search uploaded documents and retrieve information relevant to the user's question.",
+        "pineconeIndex": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nateherk"
+        },
+        "options": {
+          "pineconeNamespace": "Nike"
+        }
+      },
+      "id": "f7e6d5c4-b3a2-1098-fedc-ba9876543210",
+      "name": "database",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [
+        400,
+        224
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "HXHDwLEbNv9uRj4D",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "embed-english-v3.0"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsCohere",
+      "typeVersion": 1,
+      "position": [
+        400,
+        384
+      ],
+      "id": "b5beac4d-360c-49ae-962b-c83575b4c39b",
+      "name": "Embeddings Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "fN2uivP2ty1O9Kk4",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolWikipedia",
+      "typeVersion": 1,
+      "position": [
+        928,
+        192
+      ],
+      "id": "34d49563-a966-4bf9-a951-8e403cc9fcce",
+      "name": "Wikipedia"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        736,
+        224
+      ],
+      "id": "c296a40f-ace3-4515-987d-f16d66d8daf0",
+      "name": "Calculator"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.7,
+      "position": [
+        80,
+        -144
+      ],
+      "id": "875d7aeb-1d9a-4250-9b02-f42a00572d0d",
+      "name": "When chat message received",
+      "webhookId": "77ccc59e-b08e-43da-81cc-2396f96636c4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fix-output",
+              "name": "output",
+              "type": "string",
+              "value": "={{ $json.output.replaceAll('\\n', ' ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fix-newlines-node",
+      "name": "Fix Newlines",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        -16
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nike Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Nike Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "database": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nike Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Cohere": {
+      "ai_embedding": [
+        [
+          {
+            "node": "database",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nike Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nike Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Nike Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nike Agent": {
+      "main": [
+        [
+          {
+            "node": "Fix Newlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "456f6f7d-734b-402e-b3dd-500f79397d0f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "cUQW53kJh1wJGPXK",
+  "tags": []
+}
