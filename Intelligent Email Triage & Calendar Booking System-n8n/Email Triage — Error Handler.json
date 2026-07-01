@@ -1,0 +1,73 @@
+{
+  "name": "Email Triage — Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger-node",
+      "name": "Error Trigger",
+      "position": [
+        0,
+        208
+      ],
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "cachedResultName": "#automation-errors",
+          "mode": "name",
+          "value": "#automation-errors"
+        },
+        "text": "=⚠️ *Workflow Execution Failed*\n\n*Workflow:* {{ $json.workflow.name }}\n*Failed Node:* {{ $json.execution.lastNodeExecuted }}\n*Error Message:* {{ $json.execution.error.message }}\n\n*Execution ID:* {{ $json.execution.id }}\n*Timestamp:* {{ $now.toFormat('MMMM dd, yyyy @ hh:mm a') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "mrkdwn": true
+        }
+      },
+      "id": "error-slack-node",
+      "name": "Slack Error Alert",
+      "position": [
+        240,
+        208
+      ],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "webhookId": "338a5bb3-67b6-4615-827f-66b88f83c82e",
+      "credentials": {
+        "slackApi": {
+          "id": "CfCUq3yUFwRoEO8J",
+          "name": "Slack account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Slack Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "88b33ac2-eced-440f-abdf-487f363c9687",
+  "meta": {
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "2x772KzrcCimROW1",
+  "tags": []
+}

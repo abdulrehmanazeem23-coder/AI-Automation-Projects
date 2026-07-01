@@ -1,0 +1,1035 @@
+{
+  "name": "Email Triage & Booking System",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "id": "gmail-trigger-node",
+      "name": "Gmail Trigger",
+      "position": [
+        0,
+        304
+      ],
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LaWhUKNIxgCZhskJ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this email and return JSON only.\n\nFrom: {{ $json.From }}\nSubject: {{ $json.Subject }}\nBody: {{ $json.snippet }}\n\nReturn ONLY valid JSON. No markdown, no code blocks, no explanation.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an expert email triage assistant. Analyze inbound emails and return structured JSON.\n\nReturn ONLY a raw JSON object — no markdown, no code fences, no explanation.\n\nExact schema:\n{\n  \"classification\": \"<exactly one of: New Client Enquiry, Meeting Request, Urgent Escalation, Vendor / Spam>\",\n  \"sender_name\": \"<full name or null>\",\n  \"company\": \"<company name or null>\",\n  \"stated_need\": \"<one sentence: what does the sender want?>\",\n  \"urgency_score\": <integer 1-5>,\n  \"proposed_meeting_times\": [\"<ISO 8601 datetime if mentioned, else empty array>\"],\n  \"summary\": \"<2-3 sentence neutral summary>\"\n}\n\nRules:\n- classification MUST be exactly one of the four strings above\n- urgency_score: 1=low, 5=critical; use 4+ for urgent/ASAP/critical/deadline\n- proposed_meeting_times: always an array, [] if none mentioned\n- Never output markdown, code fences, or extra fields"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "llm-chain-node",
+      "name": "Email Triage LLM",
+      "position": [
+        272,
+        304
+      ],
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "groq-model-node",
+      "name": "Groq Chat Model",
+      "position": [
+        272,
+        512
+      ],
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "credentials": {
+        "groqApi": {
+          "id": "hMAHLfkRnqL9NFQ1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"classification\": \"New Client Enquiry\",\n  \"sender_name\": \"John Smith\",\n  \"company\": \"Acme Corp\",\n  \"stated_need\": \"The sender wants a product demo.\",\n  \"urgency_score\": 3,\n  \"proposed_meeting_times\": [],\n  \"summary\": \"John from Acme Corp wants a product demo for his team. No meeting times proposed.\"\n}",
+        "autoFix": true
+      },
+      "id": "output-parser-node",
+      "name": "Structured Output Parser",
+      "position": [
+        272,
+        688
+      ],
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ JSON.parse($json.text).classification }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "New Client Enquiry"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "New Client Enquiry"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ JSON.parse($json.text).classification }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "Meeting Request"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "Meeting Request"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ JSON.parse($json.text).classification }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "Urgent Escalation"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "Urgent Escalation"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ JSON.parse($json.text).classification }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "Vendor / Spam"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "Vendor / Spam"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "switch-node",
+      "name": "Route by Classification",
+      "position": [
+        528,
+        304
+      ],
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "cachedResultName": "Email Triage CRM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w/edit?usp=drivesdk",
+          "mode": "list",
+          "value": "1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Enquiries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w/edit#gid=0",
+          "mode": "list",
+          "value": "gid=0"
+        },
+        "columns": {
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Date",
+              "id": "Date",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Sender Name",
+              "id": "Sender Name",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Sender Email",
+              "id": "Sender Email",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Subject",
+              "id": "Subject",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Company",
+              "id": "Company",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Summary",
+              "id": "Summary",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Classification",
+              "id": "Classification",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Urgency",
+              "id": "Urgency",
+              "removed": false,
+              "required": false,
+              "type": "number"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action Taken",
+              "id": "Action Taken",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Action Taken": "=Logged to CRM & Slack alert sent",
+            "Classification": "={{ JSON.parse($json.text).classification }}",
+            "Company": "={{ JSON.parse($json.text).company }}",
+            "Date": "={{ $now.toISO() }}",
+            "Sender Email": "={{ $('Gmail Trigger').item.json.From }}",
+            "Sender Name": "={{ JSON.parse($json.text).sender_name }}",
+            "Subject": "={{ $('Gmail Trigger').item.json.Subject }}",
+            "Summary": "={{ JSON.parse($json.text).summary }}",
+            "Urgency": "={{ JSON.parse($json.text).urgency_score }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "gsheets-enquiry-node",
+      "name": "Log New Enquiry to Sheets",
+      "position": [
+        800,
+        80
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "cachedResultName": "sales",
+          "mode": "list",
+          "value": "C0BE30SGU0Y"
+        },
+        "text": "=*📩 New Client Enquiry*\n\n*From:* {{ $json['Sender Name'] || 'Unknown' }} — {{ JSON.parse($('Email Triage LLM').item.json.text).company || 'Unknown company' }}\n*Email:* {{ $json['Sender Email'] }}\n*Subject:* {{ $json.Subject }}\n\n*🔥 Urgency:* {{ $json.Urgency }} / 5\n*📋 Summary:* {{ $json.Summary }}\n*💬 Stated Need:* {{ JSON.parse($('Email Triage LLM').item.json.text).stated_need }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sales-node",
+      "name": "Slack Sales Alert",
+      "position": [
+        1040,
+        80
+      ],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "webhookId": "dd9e80b0-9057-4f91-a22a-3a17236d22d5",
+      "credentials": {
+        "slackApi": {
+          "id": "CfCUq3yUFwRoEO8J",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "spam-check",
+              "leftValue": "={{ ['noreply@linkedin.com', 'no-reply@linkedin.com', 'messages-noreply@linkedin.com', 'noreply@twitter.com', 'noreply@facebook.com', 'mailer-daemon@googlemail.com'].some(spam => $('Gmail Trigger').item.json.From.toLowerCase().includes(spam)) }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "spam-check-node",
+      "name": "Sender in Spam List?",
+      "position": [
+        800,
+        304
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "cachedResultName": "abdulrehmanazeem23@gmail.com",
+          "mode": "id",
+          "value": "abdulrehmanazeem23@gmail.com"
+        },
+        "timeMin": "={{ DateTime.fromISO(JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times[0]).toISO() }}",
+        "timeMax": "={{ DateTime.fromISO(JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times[0]).plus({minutes: 30}).toISO() }}",
+        "options": {}
+      },
+      "id": "calendar-check-node",
+      "name": "Check Calendar Availability",
+      "position": [
+        1040,
+        224
+      ],
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "FwRu5JFIMXwdCsJD",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.available }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-slot-free-node",
+      "name": "Is Slot Free?",
+      "position": [
+        1280,
+        208
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "cachedResultName": "abdulrehmanazeem23@gmail.com",
+          "mode": "id",
+          "value": "abdulrehmanazeem23@gmail.com"
+        },
+        "start": "={{ DateTime.fromISO(JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times[0]).toISO() }}",
+        "end": "={{ DateTime.fromISO(JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times[0]).plus({minutes: 30}).toISO() }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ $('Gmail Trigger').item.json.From }}"
+          ],
+          "description": "=Auto-booked via Email Triage System.\n\nFrom: {{ $('Gmail Trigger').item.json.From }}\nSubject: {{ $('Gmail Trigger').item.json.Subject }}\n\nSummary: {{ JSON.parse($('Route by Classification').item.json.text).summary }}",
+          "summary": "=Meeting with {{ JSON.parse($('Route by Classification').item.json.text).sender_name ?? $('Gmail Trigger').item.json.From }}"
+        }
+      },
+      "id": "create-calendar-event-node",
+      "name": "Create Calendar Event",
+      "position": [
+        1440,
+        112
+      ],
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "FwRu5JFIMXwdCsJD",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a reply to this meeting request. If thhe requested slot is free then create the email accordingly, else if the requested slot is not available then create an email something like this:\nHi {{ JSON.parse($('Route by Classification').item.json.text).sender_name }},\n\nThank you for your interest! \n\nI have checked my calendar, and unfortunately, I am already booked during the time you requested ({{ JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times[0] }}). \n\nWould you be open to meeting tomorrow at this same time instead? \n\nPlease let me know if this works for you, or feel free to suggest another slot.\n\nSender name: {{ JSON.parse($('Route by Classification').item.json.text).sender_name ?? 'the sender' }}\nSummary: {{ JSON.parse($('Route by Classification').item.json.text).summary }}\nStated need: {{ JSON.parse($('Route by Classification').item.json.text).stated_need }}\nProposed times: {{ JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times.length > 0 ? JSON.parse($('Route by Classification').item.json.text).proposed_meeting_times.join(', ') : 'none provided' }}\nCalendar slot free: {{ $('Is Slot Free?').item.json.available ?? 'unknown' }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a professional email assistant. Write a concise, warm, and professional reply to a meeting request email.\n\nRules:\n- Address the sender by first name only\n- If proposed_meeting_times has values, confirm the first one and mention a video call link will follow\n- If proposed_meeting_times is empty, politely ask the sender to suggest available times\n- Keep the reply under 100 words\n- Do NOT include a subject line, sign-off name, or any placeholders like [Your Name]\n- End with: 'Looking forward to speaking with you.'\n- Output ONLY the email body text, nothing else"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "draft-llm-node",
+      "name": "Draft Reply LLM",
+      "position": [
+        1600,
+        224
+      ],
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "groq-draft-model-node",
+      "name": "Groq Chat Model (Draft)",
+      "position": [
+        1600,
+        384
+      ],
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "credentials": {
+        "groqApi": {
+          "id": "hMAHLfkRnqL9NFQ1",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Gmail Trigger').item.json.Subject }}",
+        "message": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "gmail-draft-node",
+      "name": "Draft Reply",
+      "position": [
+        1872,
+        224
+      ],
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "webhookId": "843736e6-57ed-4bfb-8e34-2a7c10788cac",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LaWhUKNIxgCZhskJ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "cachedResultName": "Email Triage CRM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w/edit?usp=drivesdk",
+          "mode": "list",
+          "value": "1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Enquiries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w/edit#gid=0",
+          "mode": "list",
+          "value": "gid=0"
+        },
+        "columns": {
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Date",
+              "id": "Date",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Sender Name",
+              "id": "Sender Name",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Sender Email",
+              "id": "Sender Email",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Subject",
+              "id": "Subject",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Company",
+              "id": "Company",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Summary",
+              "id": "Summary",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Classification",
+              "id": "Classification",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Urgency",
+              "id": "Urgency",
+              "removed": false,
+              "required": false,
+              "type": "number"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action Taken",
+              "id": "Action Taken",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Action Taken": "=Urgent alert sent to Slack",
+            "Classification": "={{ JSON.parse($json.text).classification }}",
+            "Company": "={{ JSON.parse($json.text).company }}",
+            "Date": "={{ $now.toISO() }}",
+            "Sender Email": "={{ $('Gmail Trigger').item.json.From }}",
+            "Sender Name": "={{ JSON.parse($json.text).sender_name }}",
+            "Subject": "={{ $('Gmail Trigger').item.json.Subject }}",
+            "Summary": "={{ JSON.parse($json.text).summary }}",
+            "Urgency": "={{ JSON.parse($json.text).urgency_score }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "urgent-sheets-node",
+      "name": "Log Urgent Escalation",
+      "position": [
+        800,
+        528
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "cachedResultName": "#urgent",
+          "mode": "name",
+          "value": "#urgent"
+        },
+        "text": "=🚨 *URGENT ESCALATION — Immediate Attention Required*\n\n*From:* {{ $json['Sender Name'] || 'Unknown' }} ({{ $json['Sender Email'] }})\n*Subject:* {{ $json.Subject }}\n*🔥 Urgency Score:* {{ $json.Urgency }} / 5\n\n*Summary:* {{ $json.Summary }}\n*Stated Need:* {{ JSON.parse($('Email Triage LLM').item.json.text).stated_need }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-urgent-node",
+      "name": "Slack Urgent DM to Manager",
+      "position": [
+        1040,
+        528
+      ],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "webhookId": "dce2f0a3-fdce-489c-8dac-7c27632ce18a",
+      "credentials": {
+        "slackApi": {
+          "id": "CfCUq3yUFwRoEO8J",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "cachedResultName": "Email Triage CRM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w/edit?usp=drivesdk",
+          "mode": "list",
+          "value": "1GVwMHXT5aQ3JlHGf9ICTmKZT4l8f9UmOUD4QDAbtt0w"
+        },
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Filtered",
+          "mode": "name",
+          "value": "Filtered"
+        },
+        "columns": {
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Date",
+              "id": "Date",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Sender Email",
+              "id": "Sender Email",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Subject",
+              "id": "Subject",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Reason",
+              "id": "Reason",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Date": "={{ $now.toISO() }}",
+            "Reason": "={{ JSON.parse($('Email Triage LLM').item.json.text).stated_need }}",
+            "Sender Email": "={{ $('Gmail Trigger').item.json.From }}",
+            "Subject": "={{ $('Gmail Trigger').item.json.Subject }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "spam-sheets-node",
+      "name": "Log to Filtered Tab",
+      "position": [
+        800,
+        752
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Email Triage LLM",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "Email Triage LLM",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model (Draft)": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "Draft Reply LLM",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "index": 0,
+            "node": "Email Triage LLM",
+            "type": "ai_outputParser"
+          }
+        ]
+      ]
+    },
+    "Email Triage LLM": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Route by Classification",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Route by Classification": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Log New Enquiry to Sheets",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Sender in Spam List?",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Log Urgent Escalation",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Log to Filtered Tab",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Log New Enquiry to Sheets": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Slack Sales Alert",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Sender in Spam List?": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Log to Filtered Tab",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Check Calendar Availability",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Check Calendar Availability": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Is Slot Free?",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Is Slot Free?": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Draft Reply LLM",
+            "type": "main"
+          }
+        ],
+        []
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Draft Reply LLM",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Draft Reply LLM": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Draft Reply",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Log Urgent Escalation": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Slack Urgent DM to Manager",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "2x772KzrcCimROW1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "a148f4a1-0735-471d-8acc-9bfd0473843f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "kO0E3DPelJjzGHPj",
+  "tags": []
+}
