@@ -1,0 +1,1052 @@
+{
+  "name": "Competitor Intelligence System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 7 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger_1",
+      "name": "Weekly Trigger (Mon 7:30AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks",
+          "mode": "list",
+          "cachedResultName": "Competitor Intelligence",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 686326867,
+          "mode": "list",
+          "cachedResultName": "Config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit#gid=686326867"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Type",
+              "lookupValue": "website"
+            },
+            {
+              "lookupColumn": "Active",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gsheets_read_config_1",
+      "name": "Get Active Competitor URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads rows from the Config sheet where Type=website AND Active=true. URL is in 'Value', competitor name is in 'Label'. REPLACE the placeholder documentId with the real Competitor Intelligence sheet ID."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v1/scrape",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "fireCrawlApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ url: $json.Value, formats: [\"markdown\"] }) }}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "http_firecrawl_1",
+      "name": "Scrape via Firecrawl",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        320
+      ],
+      "credentials": {
+        "fireCrawlApi": {
+          "id": "cXDa3pulwhnM1igg",
+          "name": "FireCrawl account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Calls Firecrawl /v1/scrape for the URL in the 'Value' column. On failure, routes to the error output (index 1) instead of stopping the workflow."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks",
+          "mode": "list",
+          "cachedResultName": "Competitor Intelligence",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Error Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "URL": "={{ $('Get Active Competitor URLs').item.json.Value }}",
+            "Timestamp": "={{ $now.toISO() }}",
+            "Error Message": "={{ typeof $json.error === 'string' ? $json.error : ($json.error && $json.error.message ? $json.error.message : JSON.stringify($json).slice(0, 500)) }}",
+            "Note": "={{ 'Firecrawl scrape failed for ' + $('Get Active Competitor URLs').item.json.Label }}",
+            "Fetch Failed": "Yes"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "type": "string",
+              "required": false,
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "type": "string",
+              "required": false,
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error Message",
+              "displayName": "Error Message",
+              "type": "string",
+              "required": false,
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Note",
+              "displayName": "Note",
+              "type": "string",
+              "required": false,
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fetch Failed",
+              "displayName": "Fetch Failed",
+              "type": "string",
+              "required": false,
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "gsheets_append_error_1",
+      "name": "Log Scrape Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1360,
+        480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends a failure row to the Error Logs sheet. This branch runs off the HTTP node's error output, so remaining URLs keep processing."
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "competitor_snapshots",
+        "limit": 1,
+        "orderBy": "scraped_at.desc",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "url",
+              "condition": "eq",
+              "keyValue": "={{ $('Get Active Competitor URLs').item.json.Value }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase_get_snapshot_1",
+      "name": "Get Latest Snapshot",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "d8qtmRD7ZC6BMCCa",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Fetches the most recent prior snapshot for this URL. 'Always Output Data' is ON so URLs with no prior snapshot still emit one empty item, keeping item pairing intact for the diff step."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple, dependency-free FNV-1a hash so we don't rely on Node's crypto module being allow-listed\nfunction fnv1aHash(str) {\n  let hash = 0x811c9dc5;\n  for (let i = 0; i < str.length; i++) {\n    hash ^= str.charCodeAt(i);\n    hash = (hash * 0x01000193) >>> 0;\n  }\n  return hash.toString(16);\n}\n\n// Thanks to the Loop Over Items node (batch size 1), exactly one item flows through\n// this whole branch at a time, so itemMatching(0) unambiguously resolves each\n// referenced node's data for the current loop iteration.\nconst scraped = $('Scrape via Firecrawl').itemMatching(0).json;\nconst config = $('Get Active Competitor URLs').itemMatching(0).json;\nconst prev = ($input.first() && $input.first().json) || {};\n\nconst newContent = scraped.data?.markdown || scraped.markdown || scraped.data?.content || scraped.content || '';\n\n// Firecrawl (and similar scrapers) can return HTTP 200 with an application-level\n// failure (success: false, or just an empty body) for a blocked/broken page.\n// That never hits the HTTP node's error output, so we catch it here instead and\n// route it to the same error log as a real fetch failure, rather than silently\n// treating an empty scrape as a '100% content change'.\nif (scraped.success === false || newContent.trim().length === 0) {\n  return [{\n    json: {\n      __scrapeFailed: true,\n      error: 'Firecrawl returned no usable content (possible scrape failure, block, or empty page). Raw response: ' + JSON.stringify(scraped).slice(0, 300),\n      url: config.Value,\n      label: config.Label\n    }\n  }];\n}\n\nconst newLength = newContent.length;\nconst newHash = fnv1aHash(newContent);\n\n// 'item.json' is the previous snapshot row from Supabase, or {} if none existed\nconst prevContent = prev.content || '';\nconst prevLength = prevContent.length;\nconst prevHash = prev.hash || null;\n\nlet percentChange = 100; // treat 'no prior snapshot' as a full (first-time) change\nif (prevLength > 0) {\n  percentChange = (Math.abs(newLength - prevLength) / prevLength) * 100;\n}\n\nconst hashChanged = prevHash !== null && prevHash !== newHash;\nconst significantChange = prevLength === 0 || percentChange > 20;\n\n// Accumulate every significant change into static data so the post-loop\n// 'Collect Website Changes' step can gather them all after the loop finishes.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.changedCompetitors) staticData.changedCompetitors = [];\n\nif (significantChange) {\n  const resultItem = {\n    url: config.Value,\n    label: config.Label,\n    content: newContent,\n    hash: newHash,\n    scraped_at: new Date().toISOString(),\n    percent_change: Math.round(percentChange * 100) / 100,\n    hash_changed: hashChanged,\n    is_first_snapshot: prevLength === 0\n  };\n  staticData.changedCompetitors.push(resultItem);\n  return [{ json: resultItem }];\n}\n\n// Change is below the 20% threshold -> this item's run terminates here\nreturn [];"
+      },
+      "id": "code_diff_1",
+      "name": "Compare Content & Generate Hash",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        304
+      ],
+      "notes": "Diffs new vs previous content. Items with <20% change are dropped here (their run ends); items with >=20% change (or no prior snapshot) continue to the Supabase Insert node."
+    },
+    {
+      "parameters": {
+        "tableId": "competitor_snapshots",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.content }}"
+            },
+            {
+              "fieldId": "hash",
+              "fieldValue": "={{ $json.hash }}"
+            },
+            {
+              "fieldId": "scraped_at",
+              "fieldValue": "={{ $json.scraped_at }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase_insert_1",
+      "name": "Insert New Snapshot",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        304
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "d8qtmRD7ZC6BMCCa",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Inserts the new snapshot row for URLs that changed significantly."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop_over_items_1",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        880,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks",
+          "mode": "list",
+          "cachedResultName": "Competitor Intelligence",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 686326867,
+          "mode": "list",
+          "cachedResultName": "Config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit#gid=686326867"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Type",
+              "lookupValue": "linkedin"
+            },
+            {
+              "lookupColumn": "Active",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gsheets_read_linkedin_1",
+      "name": "Get LinkedIn URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        704
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads rows from Config where Type=linkedin AND Active=true. Parallel branch off the same weekly trigger."
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "Value",
+              "renameField": true,
+              "outputFieldName": "urls"
+            },
+            {
+              "fieldToAggregate": "Label",
+              "renameField": true,
+              "outputFieldName": "labels"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aggregate_linkedin_urls_1",
+      "name": "Aggregate LinkedIn URLs",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        704,
+        704
+      ],
+      "alwaysOutputData": true,
+      "notes": "Collapses the N LinkedIn config rows into a single item with urls[] and labels[] arrays, since the Apify actor should run once for the whole list."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~linkedin-post-search-scraper/run-sync-get-dataset-items",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "apifyApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ urls: $json.urls }) }}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": 180000
+        }
+      },
+      "id": "apify_linkedin_scrape_1",
+      "name": "Run Apify LinkedIn Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        704
+      ],
+      "credentials": {
+        "apifyApi": {
+          "id": "2eSVnUYt3joO3Ndx",
+          "name": "Apify account 2"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Calls Apify's run-sync-get-dataset-items endpoint so it runs the actor and waits for the dataset in one call. ASSUMPTION: the actor's input field is 'urls' — verify this against the actual input schema for apify/linkedin-post-search-scraper in Apify Console and adjust jsonBody if it differs. Replace the httpQueryAuth credential with your real Apify API token."
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.changedCompetitors = [];\nreturn $input.all();"
+      },
+      "id": "reset_accumulator_1",
+      "name": "Reset Weekly Accumulator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        96
+      ],
+      "notes": "Clears the workflow static-data accumulator at the start of each run, before the loop begins, so this run's changed-competitor list doesn't carry over stale data from last week."
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst changes = staticData.changedCompetitors || [];\nif (changes.length === 0) {\n  return [];\n}\nreturn changes.map(c => ({ json: c }));"
+      },
+      "id": "collect_website_changes_1",
+      "name": "Collect Website Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        160
+      ],
+      "notes": "Runs once, after the Loop Over Items 'done' output fires (i.e. after every competitor URL has been processed). Reads back everything the diff step accumulated in static data across all loop iterations."
+    },
+    {
+      "parameters": {},
+      "id": "merge_data_1",
+      "name": "Merge Website & LinkedIn Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2112,
+        400
+      ],
+      "notes": "Concatenates the significant website changes with the Apify LinkedIn dataset items into one combined list for the AI summary step."
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "items",
+        "options": {}
+      },
+      "id": "combine_all_data_1",
+      "name": "Combine All Competitor Data",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2352,
+        400
+      ],
+      "alwaysOutputData": true,
+      "notes": "Collapses the merged list back into a single item so the Gemini call fires once with all the data, not once per item."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [ { parts: [ { text: \"Analyze this competitor data. Provide a structured HTML summary grouped by the competitor Label. Compare new/removed pages, summarize content tone shifts, extract key themes from the LinkedIn posts, and provide 3 strategic insights. Also, note any URLs that failed to fetch.\\n\\nCompetitor Data (JSON):\\n\" + JSON.stringify($json.items) } ] } ] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "gemini_summary_1",
+      "name": "Generate AI Summary (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2592,
+        400
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "knvaUw1oWLf08ZXv",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Sends the combined competitor JSON to Gemini 2.5 Flash-Lite for a structured HTML summary. Replace the httpHeaderAuth credential with a real Gemini API key (header x-goog-api-key)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet text = '';\ntry {\n  text = response.candidates[0].content.parts[0].text;\n} catch (e) {\n  text = '<p>Error: Gemini response did not contain the expected content.</p><pre>' + JSON.stringify(response).slice(0, 1000) + '</pre>';\n}\nreturn [{ json: { html: text } }];"
+      },
+      "id": "extract_html_1",
+      "name": "Extract HTML Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2832,
+        400
+      ],
+      "notes": "Pulls the plain HTML text out of Gemini's response shape (candidates[0].content.parts[0].text), with a visible fallback if that shape isn't what comes back."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks",
+          "mode": "list",
+          "cachedResultName": "Competitor Intelligence",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 686326867,
+          "mode": "list",
+          "cachedResultName": "Config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit#gid=686326867"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Type",
+              "lookupValue": "recipient"
+            },
+            {
+              "lookupColumn": "Active",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gsheets_read_recipients_1",
+      "name": "Get Recipient Emails",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3072,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads rows from Config where Type=recipient AND Active=true. Target email addresses live in Value."
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "Value",
+              "renameField": true,
+              "outputFieldName": "emails"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aggregate_recipients_1",
+      "name": "Aggregate Recipient Emails",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3312,
+        400
+      ],
+      "alwaysOutputData": true,
+      "notes": "Collapses the N recipient rows into a single item with an emails[] array."
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $('Extract HTML Summary').item.json.html;\nconst emailsItem = $input.first().json;\nconst emails = emailsItem.emails || [];\n\n// No active recipients configured this week -> skip sending rather than\n// letting the Gmail node error out on an empty 'To' field.\nif (emails.length === 0) {\n  return [];\n}\n\nreturn [{ json: { html, toEmails: emails.join(', ') } }];"
+      },
+      "id": "prepare_email_1",
+      "name": "Prepare Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3552,
+        400
+      ],
+      "notes": "Combines the Gemini HTML with the recipient list into one item for the Gmail node. Only one item is in play at this point, so referencing Extract HTML Summary by .item is safe here."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.toEmails }}",
+        "subject": "=Weekly Competitor Intelligence Report - {{ $now.format('yyyy-MM-dd') }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "gmail_send_1",
+      "name": "Send Weekly Report Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3792,
+        400
+      ],
+      "webhookId": "23cf6b62-efba-4e09-bd81-464711f16f4f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LaWhUKNIxgCZhskJ",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "Sends the AI-generated HTML report to every active recipient in one email. Replace the Gmail credential placeholder with your real OAuth2 credential ID."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "scrape-failed-cond",
+              "leftValue": "={{ $json.__scrapeFailed }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if_route_scrape_outcome_1",
+      "name": "Route Scrape Outcome",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        496
+      ],
+      "notes": "Splits marker items flagged by the Code node (application-level scrape failures, e.g. Firecrawl returning HTTP 200 with no usable content) away from real diffs."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks",
+          "mode": "list",
+          "cachedResultName": "Competitor Intelligence",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Error Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Nsl8JO_nD17vcvkrq8_KyrJtLaMBJe-TaAdHcJGrks/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "URL": "={{ $('Get LinkedIn URLs').item.json.Value }}",
+            "Error Message": "={{ typeof $json.error === 'string' ? $json.error : ($json.error && $json.error.message ? $json.error.message : JSON.stringify($json).slice(0, 500)) }}",
+            "Fetch Failed": "Yes",
+            "Timestamp": "={{ $now.toISO() }}",
+            "Note": "={{ $json.error.description }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error Message",
+              "displayName": "Error Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Note",
+              "displayName": "Note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fetch Failed",
+              "displayName": "Fetch Failed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "gsheets_log_linkedin_error_1",
+      "name": "Log LinkedIn Scrape Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        912
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Logs a failure row if the whole Apify LinkedIn batch call fails. Since the Apify call covers all LinkedIn URLs in one request, we can't isolate which one failed — the row records the full batch and the run continues without the LinkedIn data."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Trigger (Mon 7:30AM)": {
+      "main": [
+        [
+          {
+            "node": "Get Active Competitor URLs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get LinkedIn URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape via Firecrawl": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Scrape Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Compare Content & Generate Hash",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Scrape Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Collect Website Changes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape via Firecrawl",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert New Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Scrape Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Scrape Error": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LinkedIn URLs": {
+      "main": [
+        [
+          {
+            "node": "Aggregate LinkedIn URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate LinkedIn URLs": {
+      "main": [
+        [
+          {
+            "node": "Run Apify LinkedIn Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify LinkedIn Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge Website & LinkedIn Data",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Log LinkedIn Scrape Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Competitor URLs": {
+      "main": [
+        [
+          {
+            "node": "Reset Weekly Accumulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Weekly Accumulator": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Website Changes": {
+      "main": [
+        [
+          {
+            "node": "Merge Website & LinkedIn Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Website & LinkedIn Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Competitor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine All Competitor Data": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Summary (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Summary (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Extract HTML Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract HTML Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract HTML Summary": {
+      "main": [
+        [
+          {
+            "node": "Get Recipient Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recipient Emails": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Recipient Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Recipient Emails": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Content & Generate Hash": {
+      "main": [
+        [
+          {
+            "node": "Route Scrape Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Scrape Outcome": {
+      "main": [
+        [
+          {
+            "node": "Log Scrape Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert New Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true
+  },
+  "versionId": "f588c200-b532-439b-aa85-b7ddc3f307df",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "CK3g1wOU5Pf2gpof",
+  "tags": []
+}
