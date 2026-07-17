@@ -1,0 +1,1630 @@
+{
+  "name": "Lead Gen & AI-Qualified Email Outreach Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Lead Generation Search",
+        "formDescription": "Enter a target city and business niche to scrape leads via Google Maps.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Target City",
+              "placeholder": "e.g. Austin, TX",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Niche",
+              "placeholder": "e.g. Dentists",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "form_trigger_1",
+      "name": "Lead Search Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -208,
+        304
+      ],
+      "webhookId": "5d97cbfb-e0b7-4724-805a-ffd15ef0018b",
+      "notes": "Captures Target City and Niche from the user to kick off the scraping pipeline."
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "AabCualFIriz3X6Fs",
+          "cachedResultName": "Google Maps Scraper (vortex_data/google-maps)",
+          "cachedResultUrl": "https://console.apify.com/actors/AabCualFIriz3X6Fs/input"
+        },
+        "customBody": "={{ JSON.stringify({\n  searchStringsArray: [ $json[\"Niche\"] ],\n  locationQuery: $json[\"Target City\"],\n  maxCrawledPlacesPerSearch: 50,\n  language: \"en\",\n  skipClosedPlaces: false\n}) }}"
+      },
+      "id": "apify_scraper_1",
+      "name": "Apify - Google Maps Scraper",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        48,
+        304
+      ],
+      "credentials": {
+        "apifyApi": {
+          "id": "2eSVnUYt3joO3Ndx",
+          "name": "Apify account 2"
+        }
+      },
+      "notes": "Runs apify/google-maps-scraper with Niche + Target City mapped from the form, and waits for the dataset (Run actor and get dataset = synchronous, blocks until finished)."
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "split_batches_1",
+      "name": "Batch Businesses (10 at a time)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        288,
+        304
+      ],
+      "notes": "Batches the scraped business list 10 at a time to protect downstream APIs (e.g. AI classification, enrichment) from rate limits."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "website-empty-check",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if_website_check",
+      "name": "Website Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        528,
+        304
+      ],
+      "notes": "True (output 0) = website field is empty/null -> No Website branch. False (output 1) = website exists -> scrape it with Firecrawl."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "classification",
+              "value": "No Website",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "trackingScore",
+              "value": "={{ ($json.trackingScore || 0) + 3 }}",
+              "type": "number"
+            },
+            {
+              "id": "a3",
+              "name": "scraped_content",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "set_no_website",
+      "name": "No Website Flag",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        160
+      ],
+      "notes": "Branch A: no website on record. Flags classification and bumps the inline tracking score by +3, then passes straight to Groq."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v1/scrape",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "fireCrawlApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ url: $json.website, formats: [\"markdown\"], onlyMainContent: true }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "http_firecrawl_scrape",
+      "name": "Firecrawl - Scrape Homepage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        768,
+        448
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "fireCrawlApi": {
+          "id": "cXDa3pulwhnM1igg",
+          "name": "FireCrawl account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Branch B: website exists. Scrapes homepage markdown via Firecrawl /v1/scrape. continueOnFail is enabled so a failed scrape doesn't kill the batch - it flows to 'Prepare Scraped Content' with an error field instead."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const original = $('Website Check').item.json;\nconst scrapeResult = $json;\nconst failed = Boolean(scrapeResult.error);\nconst markdown = !failed && scrapeResult.data && scrapeResult.data.markdown ? scrapeResult.data.markdown : '';\n\nreturn {\n  json: {\n    ...original,\n    classification: failed ? 'Scrape Failed' : 'Website Scraped',\n    scraped_content: markdown,\n    trackingScore: original.trackingScore || 0\n  }\n};"
+      },
+      "id": "code_prepare_scraped",
+      "name": "Prepare Scraped Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        416
+      ],
+      "notes": "Re-merges the original business record (pulled from 'Website Check') with the Firecrawl result. Handles both success and the caught-error case cleanly so Groq always gets a consistent shape."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"llama-3.1-8b-instant\",\n  temperature: 0,\n  response_format: { type: \"json_object\" },\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are a strict B2B lead-qualification engine. Evaluate the business based on the provided data and assign a fit_score based on this exact rubric:\\n\\n- Score 1-3: Low fit. No website available, irrelevant category, or no obvious B2B pain points.\\n- Score 4-7: Moderate fit. Average online presence, functional but missing key modern features (e.g., online booking, clear value prop).\\n- Score 8-10: High fit. Clear need for services. Outdated website, missing critical information, or a high-value niche with obvious operational gaps we can fix.\\n\\nRespond with ONLY a single valid JSON object. No markdown, no code fences. Your output MUST use exactly this structure (replace values with your evaluation):\\n{\\\"fit_score\\\": 5, \\\"pain_points\\\": [\\\"point 1\\\", \\\"point 2\\\"], \\\"industry\\\": \\\"Home Services\\\", \\\"estimated_size\\\": \\\"SMB\\\", \\\"outreach_angle\\\": \\\"One specific sentence about how to help.\\\"}\"\n    },\n    {\n      role: \"user\",\n      content: \"Business Name: \" + ($json.title || $json.name || \"Unknown\") + \"\\nCategory: \" + ($json.categoryName || $json.category || \"Unknown\") + \"\\nWebsite Classification: \" + ($json.classification || \"Unknown\") + \"\\nWebsite Content:\\n\" + ($json.scraped_content || \"No website available for this business.\")\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "http_groq_qualify",
+      "name": "Groq - AI Qualification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "groqApi": {
+          "id": "hMAHLfkRnqL9NFQ1",
+          "name": "Groq account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Sends the merged record (either branch) to Groq's chat completions endpoint in JSON mode. System prompt forces the fit_score/pain_points/industry/estimated_size/outreach_angle schema."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- 1. Pull in the two sources, preserving lineage ----\nconst groqResponse = $json;\nconst business = $('Website Check').item.json;\n\nlet parsed;\n\ntry {\n  // ---- 2. Hunt for the actual text content across possible shapes ----\n  const rawContent =\n    groqResponse?.choices?.[0]?.message?.content ??\n    groqResponse?.body?.choices?.[0]?.message?.content ??\n    groqResponse?.choices?.[0]?.text ??\n    groqResponse?.body?.choices?.[0]?.text ??\n    null;\n\n  if (!rawContent) {\n    const apiError =\n      groqResponse?.error?.message ||\n      groqResponse?.body?.error?.message ||\n      JSON.stringify(groqResponse).slice(0, 300);\n    throw new Error(`No content found in Groq response. API said: ${apiError}`);\n  }\n\n  // ---- 3. Strip markdown code fences safely (```json ... ``` or ``` ... ```) ----\n  const cleanContent = rawContent\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n\n  parsed = JSON.parse(cleanContent);\n\n} catch (e) {\n  // ---- 4. Never crash the workflow - fall back to a safe, flagged record ----\n  parsed = {\n    fit_score: 0,\n    pain_points: [],\n    industry: 'Unknown',\n    estimated_size: 'SMB',\n    outreach_angle: `PARSE_ERROR: ${e.message}`\n  };\n}\n\nconst painPoints = Array.isArray(parsed.pain_points) ? parsed.pain_points : [];\n\n// ---- 5. Normalize phone: prevent Google Sheets from reading \"+...\" as a formula ----\nlet phone = business.phone || business.phoneUnformatted || '';\nif (typeof phone === 'string' && phone.startsWith('+')) {\n  phone = `'${phone}`;\n}\n\n// ---- 6. Normalize review count across Apify's inconsistent field names ----\nconst reviewsCount =\n  business.reviewsCount ??\n  business.reviewCount ??\n  business.totalReviews ??\n  0;\n\n// ---- 7. Merge everything into one clean, consistent record ----\nreturn {\n  json: {\n    ...business,\n    phone,\n    reviewsCount,\n    fit_score: Number(parsed.fit_score) || 0,\n    pain_points: painPoints,\n    pain_points_text: painPoints.join('; '),\n    industry: parsed.industry || '',\n    estimated_size: parsed.estimated_size || '',\n    outreach_angle: parsed.outreach_angle || '',\n    reason: painPoints.length ? painPoints.join('; ') : (parsed.outreach_angle || 'Low fit score')\n  }\n};"
+      },
+      "id": "code_parse_groq",
+      "name": "Parse Groq Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        304
+      ],
+      "notes": "Parses the JSON string inside Groq's choices[0].message.content and merges it back onto the original business record (pulled from 'Website Check') so downstream nodes have both the scrape/AI results and the raw Google Maps fields in one flat object."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.fit_score }}",
+                    "operator": {
+                      "operation": "lt",
+                      "type": "number"
+                    },
+                    "rightValue": 5
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Rejected"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r2a",
+                    "leftValue": "={{ $json.fit_score }}",
+                    "operator": {
+                      "operation": "gte",
+                      "type": "number"
+                    },
+                    "rightValue": 5
+                  },
+                  {
+                    "id": "r2b",
+                    "leftValue": "={{ $json.fit_score }}",
+                    "operator": {
+                      "operation": "lte",
+                      "type": "number"
+                    },
+                    "rightValue": 7
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Warm Prospects"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.fit_score }}",
+                    "operator": {
+                      "operation": "gte",
+                      "type": "number"
+                    },
+                    "rightValue": 8
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Hot Prospects"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "switch_fit_score",
+      "name": "Route by Fit Score",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1728,
+        304
+      ],
+      "notes": "Rule 1: fit_score < 5 -> Rejected. Rule 2: 5-7 -> Warm Prospects. Rule 3: >=8 -> Hot Prospects (feeds the email phase next)."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json;\nreturn {\n  json: {\n    'Business Name': d.title || d.name || '',\n    'Category': d.categoryName || d.category || '',\n    'Rating': d.totalScore || '',\n    'Review Count': d.reviewsCount || 0,\n    'Phone': d.phone || d.phoneUnformatted || '',\n    'Address': d.address || '',\n    'Website': d.website || '',\n    'Fit Score': d.fit_score,\n    'Reason': d.reason || ''\n  }\n};"
+      },
+      "id": "code_format_rejected",
+      "name": "Format - Rejected Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        64
+      ],
+      "notes": "Reshapes the record into exact column names for the 'Rejected' tab."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs",
+          "mode": "list",
+          "cachedResultName": "Lead Gen Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Rejected",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Name": "={{ $json[\"Business Name\"] }}",
+            "Category": "={{ $json.Category }}",
+            "Rating": "={{ $json.Rating }}",
+            "Review Count": "={{ $json[\"Review Count\"] }}",
+            "Phone": "={{ $json.Phone }}",
+            "Address": "={{ $json.Address }}",
+            "Website": "={{ $json.Website }}",
+            "Fit Score": "={{ $json[\"Fit Score\"] }}",
+            "Reason": "={{ $json.Reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Business Name",
+              "displayName": "Business Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rating",
+              "displayName": "Rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Review Count",
+              "displayName": "Review Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Address",
+              "displayName": "Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Website",
+              "displayName": "Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fit Score",
+              "displayName": "Fit Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reason",
+              "displayName": "Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets_append_rejected",
+      "name": "Append - Rejected",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2208,
+        64
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Appends to the 'Rejected' tab of the Lead Gen Pipeline spreadsheet. Set documentId to your actual sheet before running."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json;\nreturn {\n  json: {\n    'Business Name': d.title || d.name || '',\n    'Category': d.categoryName || d.category || '',\n    'Rating': d.totalScore || '',\n    'Review Count': d.reviewsCount || 0,\n    'Phone': d.phone || d.phoneUnformatted || '',\n    'Address': d.address || '',\n    'Website': d.website || '',\n    'Fit Score': d.fit_score,\n    'Pain Points': d.pain_points_text || '',\n    'Outreach Angle': d.outreach_angle || ''\n  }\n};"
+      },
+      "id": "code_format_warm",
+      "name": "Format - Warm Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        304
+      ],
+      "notes": "Reshapes the record into exact column names for the 'Warm Prospects' tab."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs",
+          "mode": "list",
+          "cachedResultName": "Lead Gen Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1916393372,
+          "mode": "list",
+          "cachedResultName": "Warm Prospects",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit#gid=1916393372"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Name": "={{ $json['Business Name'] }}",
+            "Category": "={{ $json.Category }}",
+            "Rating": "={{ $json.Rating }}",
+            "Review Count": "={{ $json['Review Count'] }}",
+            "Phone": "={{ $json.Phone }}",
+            "Address": "={{ $json.Address }}",
+            "Website": "={{ $json.Website }}",
+            "Fit Score": "={{ $json['Fit Score'] }}",
+            "Pain Points": "={{ $json['Pain Points'] }}",
+            "Outreach Angle": "={{ $json['Outreach Angle'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Business Name",
+              "displayName": "Business Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rating",
+              "displayName": "Rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Review Count",
+              "displayName": "Review Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Address",
+              "displayName": "Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Website",
+              "displayName": "Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fit Score",
+              "displayName": "Fit Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pain Points",
+              "displayName": "Pain Points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outreach Angle",
+              "displayName": "Outreach Angle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets_append_warm",
+      "name": "Append - Warm Prospects",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2208,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Appends to the 'Warm Prospects' tab of the Lead Gen Pipeline spreadsheet. Set documentId to your actual sheet before running."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json;\nreturn {\n  json: {\n    'Business Name': d.title || d.name || '',\n    'Category': d.categoryName || d.category || '',\n    'Rating': d.totalScore || '',\n    'Review Count': d.reviewsCount || 0,\n    'Phone': d.phone || d.phoneUnformatted || '',\n    'Address': d.address || '',\n    'Website': d.website || '',\n    'Fit Score': d.fit_score,\n    'Pain Points': d.pain_points_text || '',\n    'Outreach Angle': d.outreach_angle || '',\n    'Email': d.email || ''\n  }\n};"
+      },
+      "id": "code_format_hot",
+      "name": "Format - Hot Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        544
+      ],
+      "notes": "Reshapes the record into exact column names for the 'Hot Prospects' tab. Email field is left blank for now - no email-enrichment step exists yet in the pipeline."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs",
+          "mode": "list",
+          "cachedResultName": "Lead Gen Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1971166989,
+          "mode": "list",
+          "cachedResultName": "Hot Prospects",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit#gid=1971166989"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Name": "={{ $json['Business Name'] }}",
+            "Category": "={{ $json.Category }}",
+            "Rating": "={{ $json.Rating }}",
+            "Review Count": "={{ $json['Review Count'] }}",
+            "Phone": "={{ $json.Phone }}",
+            "Address": "={{ $json.Address }}",
+            "Website": "={{ $json.Website }}",
+            "Fit Score": "={{ $json['Fit Score'] }}",
+            "Pain Points": "={{ $json['Pain Points'] }}",
+            "Outreach Angle": "={{ $json['Outreach Angle'] }}",
+            "Email": "={{ $json.Email }}",
+            "Email Sent": "No"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Business Name",
+              "displayName": "Business Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rating",
+              "displayName": "Rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Review Count",
+              "displayName": "Review Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Address",
+              "displayName": "Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Website",
+              "displayName": "Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fit Score",
+              "displayName": "Fit Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pain Points",
+              "displayName": "Pain Points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outreach Angle",
+              "displayName": "Outreach Angle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Sent",
+              "displayName": "Email Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets_append_hot",
+      "name": "Append - Hot Prospects",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2208,
+        544
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Appends to the 'Hot Prospects' tab. This is the branch that should feed into the email outreach phase next."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs",
+          "mode": "list",
+          "cachedResultName": "Lead Gen Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1940142394,
+          "mode": "list",
+          "cachedResultName": "Sent History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit#gid=1940142394"
+        },
+        "options": {}
+      },
+      "id": "sheets_read_sent_history",
+      "name": "Read Sent History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2448,
+        704
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Reads the whole 'Sent History' tab fresh on every loop iteration so dedup stays accurate even across batches within the same run. Runs in parallel off 'Append - Hot Prospects' purely so its data can be referenced by name from 'De-duplication Check'."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read Sent History is now a guaranteed direct upstream dependency,\n// so $input here IS the Sent History rows (safe to read immediately).\nconst sentHistory = $input.all().map(i => i.json);\n\nconst sentEmails = new Set(\n  sentHistory.map(r => (r.Email || '').toString().toLowerCase().trim()).filter(Boolean)\n);\nconst sentNames = new Set(\n  sentHistory.map(r => (r['Business Name'] || '').toString().toLowerCase().trim()).filter(Boolean)\n);\n\n// Pull the actual Hot Prospects for this run from their source node explicitly,\n// rather than relying on fragile pairedItem lineage through the reshuffled Sent History data.\nconst hotProspects = $('Append - Hot Prospects').all();\n\nreturn hotProspects.map((item, idx) => {\n  const d = item.json;\n  const email = (d.Email || '').toString().toLowerCase().trim();\n  const name = (d['Business Name'] || '').toString().toLowerCase().trim();\n  const alreadySent = (email && sentEmails.has(email)) || (name && sentNames.has(name));\n  return {\n    json: {\n      ...d,\n      alreadySent\n    },\n    pairedItem: { item: idx }\n  };\n});"
+      },
+      "id": "code_dedup_check",
+      "name": "De-duplication Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        544
+      ],
+      "notes": "For each Hot Prospect, checks its Email/Business Name against the Sent History list (referenced from the sibling 'Read Sent History' node) and flags alreadySent true/false."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "dedup-1",
+              "leftValue": "={{ $json.alreadySent }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": false
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "if_not_already_sent",
+      "name": "Not Already Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2688,
+        544
+      ],
+      "notes": "True (output 0) = new prospect, not previously emailed -> continue to Groq Email Writer. False (output 1) = already in Sent History -> terminates here (Duplicate - Skip)."
+    },
+    {
+      "parameters": {},
+      "id": "noop_duplicate_skip",
+      "name": "Duplicate - Skip (No Action)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2928,
+        704
+      ],
+      "notes": "Terminal node. This business was already contacted per Sent History, so the run ends here for this item - no email is sent, no further Sent History write."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"llama-3.3-70b-versatile\",\n  temperature: 0.6,\n  response_format: { type: \"json_object\" },\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are an expert B2B cold email copywriter.\\nWrite a short, personalized, non-generic cold outreach email of EXACTLY 3 sentences in the body. Sentence 1: a specific, credible observation about the business. Sentence 2: connect one of their pain points to a concrete outcome you can help with (use the outreach angle as the hook). Sentence 3: a low-friction call to action (e.g. a quick 15-minute call). No markdown, no placeholders like [Name].\\n\\nRespond with ONLY a single valid JSON object. No markdown, no code fences, no commentary.\\nYour output MUST look EXACTLY like this concrete example (same keys, same types, different values):\\n{\\\"subject\\\": \\\"Quick question about your online booking\\\", \\\"body\\\": \\\"I noticed Riverside Dental doesn't have online scheduling on its homepage yet. That gap is likely costing you after-hours bookings from patients browsing on their phones. Worth a quick 15-minute call to see if it's a fit?\\\"}\"\n    },\n    {\n      role: \"user\",\n      content: \"Business Name: \" + ($json['Business Name'] || '') + \"\\nCity: \" + ($json.city || $json.City || '') + \"\\nPain Points: \" + ($json['Pain Points'] || '') + \"\\nOutreach Angle: \" + ($json['Outreach Angle'] || '')\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "http_groq_email_writer",
+      "name": "Groq - Email Writer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2928,
+        400
+      ],
+      "maxTries": 5,
+      "retryOnFail": true,
+      "waitBetweenTries": 12000,
+      "credentials": {
+        "groqApi": {
+          "id": "hMAHLfkRnqL9NFQ1",
+          "name": "Groq account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Writes a personalized 3-sentence cold email using Business Name, City, Pain Points, and Outreach Angle. JSON mode returns {subject, body} for reliable parsing downstream."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const original = $('Not Already Sent?').item.json;\nconst groqResponse = $json;\n\nlet parsed;\n\ntry {\n  const rawContent =\n    groqResponse?.choices?.[0]?.message?.content ??\n    groqResponse?.body?.choices?.[0]?.message?.content ??\n    groqResponse?.choices?.[0]?.text ??\n    groqResponse?.body?.choices?.[0]?.text ??\n    null;\n\n  if (!rawContent) {\n    const apiError =\n      groqResponse?.error?.message ||\n      groqResponse?.body?.error?.message ||\n      JSON.stringify(groqResponse).slice(0, 300);\n    throw new Error(`No content found in Groq response. API said: ${apiError}`);\n  }\n\n  const cleanContent = rawContent\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n\n  parsed = JSON.parse(cleanContent);\n} catch (e) {\n  parsed = {\n    subject: 'Quick question for ' + (original['Business Name'] || 'your team'),\n    body: 'Draft generation failed (' + e.message + '). Please write this email manually before sending.'\n  };\n}\n\nreturn {\n  json: {\n    ...original,\n    email_subject: parsed.subject || ('Quick question for ' + (original['Business Name'] || 'your team')),\n    email_body: parsed.body || ''\n  }\n};"
+      },
+      "id": "code_parse_email_draft",
+      "name": "Parse Email Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        400
+      ],
+      "notes": "Parses Groq's {subject, body} JSON out of choices[0].message.content, falling back to a safe generic draft if parsing fails so the run never breaks."
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "wait_2_seconds",
+      "name": "Wait 2 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3408,
+        400
+      ],
+      "webhookId": "34463f33-28de-4e8a-a634-0039120fd532",
+      "notes": "Small delay before each send to keep Gmail sending patterns looking human and reduce spam-filter/rate-limit risk."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.Email }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.email_body }}",
+        "options": {}
+      },
+      "id": "gmail_send_cold_email",
+      "name": "Gmail - Send Cold Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3648,
+        400
+      ],
+      "webhookId": "61c6bd74-10ea-4e10-802b-0579377a06b5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LaWhUKNIxgCZhskJ",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Sends the AI-drafted cold email to the prospect's address."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs",
+          "mode": "list",
+          "cachedResultName": "Lead Gen Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1940142394,
+          "mode": "list",
+          "cachedResultName": "Sent History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit#gid=1940142394"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Name": "={{ $('Not Already Sent?').item.json['Business Name'] }}",
+            "Email": "={{ $('Not Already Sent?').item.json['Email'] }}",
+            "Sent At": "={{ $now.toISO() }}",
+            "Status": "Sent"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Business Name",
+              "displayName": "Business Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sent At",
+              "displayName": "Sent At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets_append_sent_history",
+      "name": "Append - Sent History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3888,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "On successful send, logs Business Name, Email, sent_at timestamp, and status 'Sent' to the Sent History tab so future runs skip this business."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json;\nconst errMsg = (d.error && d.error.message) ? d.error.message : (d.message || 'Unknown Gmail send error');\nreturn {\n  json: {\n    'Business Name': d['Business Name'] || '',\n    'Category': d['Category'] || '',\n    'Rating': d['Rating'] || '',\n    'Review Count': d['Review Count'] || 0,\n    'Phone': d['Phone'] || '',\n    'Address': d['Address'] || '',\n    'Website': d['Website'] || '',\n    'Fit Score': d['Fit Score'] || '',\n    'Reason': 'Email send failed: ' + errMsg\n  }\n};"
+      },
+      "id": "code_format_send_error",
+      "name": "Format - Send Error Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3888,
+        624
+      ],
+      "notes": "Runs only on the Gmail node's error output. Builds a Rejected-tab row capturing the business + the actual send failure reason."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs",
+          "mode": "list",
+          "cachedResultName": "Lead Gen Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Rejected",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1l5mNUiM0jVg9FOj05b_MJMPhZpYde7uRHh42lHVWXhs/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Business Name",
+              "displayName": "Business Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rating",
+              "displayName": "Rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Review Count",
+              "displayName": "Review Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Address",
+              "displayName": "Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Website",
+              "displayName": "Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fit Score",
+              "displayName": "Fit Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reason",
+              "displayName": "Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets_append_send_error",
+      "name": "Append - Send Error to Rejected",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4128,
+        624
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Wx9Djyyc2HCbyFHA",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logs a failed cold-email send into the Rejected tab so it doesn't silently vanish, and won't be retried as a duplicate."
+    },
+    {
+      "parameters": {
+        "amount": 6
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        304
+      ],
+      "id": "bfaae20b-e12b-4cc8-9497-589e94e89adb",
+      "name": "Wait",
+      "webhookId": "6d027121-108a-40f0-b62f-1f107cfe3462"
+    },
+    {
+      "parameters": {
+        "amount": 6
+      },
+      "id": "wait_before_email_writer",
+      "name": "Wait Before Email Writer",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2688,
+        400
+      ],
+      "webhookId": "122e8a46-8371-48ab-a22b-c77937761bf8",
+      "notes": "Paces the Hot Prospects email-writing call against Groq's rate limit, same reasoning as the 'Wait' node before the qualification call."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Lead Search Form": {
+      "main": [
+        [
+          {
+            "node": "Apify - Google Maps Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Google Maps Scraper": {
+      "main": [
+        [
+          {
+            "node": "Batch Businesses (10 at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Businesses (10 at a time)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Website Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website Check": {
+      "main": [
+        [
+          {
+            "node": "No Website Flag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Firecrawl - Scrape Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firecrawl - Scrape Homepage": {
+      "main": [
+        [
+          {
+            "node": "Prepare Scraped Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Website Flag": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Scraped Content": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq - AI Qualification": {
+      "main": [
+        [
+          {
+            "node": "Parse Groq Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Groq Response": {
+      "main": [
+        [
+          {
+            "node": "Route by Fit Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Fit Score": {
+      "main": [
+        [
+          {
+            "node": "Format - Rejected Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format - Warm Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format - Hot Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format - Rejected Row": {
+      "main": [
+        [
+          {
+            "node": "Append - Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format - Warm Row": {
+      "main": [
+        [
+          {
+            "node": "Append - Warm Prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format - Hot Row": {
+      "main": [
+        [
+          {
+            "node": "Append - Hot Prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append - Rejected": {
+      "main": [
+        [
+          {
+            "node": "Batch Businesses (10 at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append - Warm Prospects": {
+      "main": [
+        [
+          {
+            "node": "Batch Businesses (10 at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append - Hot Prospects": {
+      "main": [
+        [
+          {
+            "node": "Read Sent History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "De-duplication Check": {
+      "main": [
+        [
+          {
+            "node": "Not Already Sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Already Sent?": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Email Writer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicate - Skip (No Action)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq - Email Writer": {
+      "main": [
+        [
+          {
+            "node": "Parse Email Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Draft": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Send Cold Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Send Cold Email": {
+      "main": [
+        [
+          {
+            "node": "Append - Sent History",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format - Send Error Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format - Send Error Row": {
+      "main": [
+        [
+          {
+            "node": "Append - Send Error to Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sent History": {
+      "main": [
+        [
+          {
+            "node": "De-duplication Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate - Skip (No Action)": {
+      "main": [
+        []
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Groq - AI Qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Email Writer": {
+      "main": [
+        [
+          {
+            "node": "Groq - Email Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": "TkF4yJ5rEJYtpb9x"
+  },
+  "versionId": "342ce550-9886-4ef4-b113-5e304e63a51a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "6IJJAGxGC0KIQpUN",
+  "tags": []
+}
