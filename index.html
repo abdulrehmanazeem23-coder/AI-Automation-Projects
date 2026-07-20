@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital@0;1&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #10192a;
+    --ink-2: #182238;
+    --ink-3: #1f2c47;
+    --paper: #ece7db;
+    --paper-2: #f4f0e6;
+    --brass: #b98d3e;
+    --brass-light: #d9b872;
+    --text-hi: #ede9df;
+    --text-lo: #8d9ab0;
+    --user-bubble: #263a5c;
+    --rule: #2c3b5c;
+    --error: #c2542d;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--ink);
+    color: var(--text-hi);
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* ---------- Header ---------- */
+
+  header {
+    flex: none;
+    padding: 22px 32px 18px;
+    background: var(--ink-2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .brand-mark {
+    font-family: 'Libre Caslon Text', serif;
+    font-style: italic;
+    font-size: 15px;
+    color: var(--brass-light);
+    letter-spacing: 0.02em;
+  }
+
+  h1 {
+    font-family: 'Libre Caslon Text', serif;
+    font-weight: 400;
+    font-size: 22px;
+    margin: 2px 0 0;
+    color: var(--text-hi);
+    letter-spacing: 0.01em;
+  }
+
+  .subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--text-lo);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .rule {
+    height: 2px;
+    background: linear-gradient(90deg, var(--brass) 0%, transparent 70%);
+    margin-top: 16px;
+  }
+
+  /* ---------- Chat area ---------- */
+
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 32px 8px;
+    scroll-behavior: smooth;
+  }
+
+  .row {
+    display: flex;
+    margin-bottom: 22px;
+    animation: rise 0.25s ease;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .row.user { justify-content: flex-end; }
+  .row.assistant { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 68ch;
+    padding: 14px 18px;
+    border-radius: 3px;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+
+  .row.user .bubble {
+    background: var(--user-bubble);
+    color: var(--text-hi);
+    border-top-right-radius: 0;
+  }
+
+  .row.assistant .bubble {
+    background: var(--paper);
+    color: #1b1a16;
+    border-top-left-radius: 0;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  }
+
+  .row.assistant .bubble p:first-child { margin-top: 0; }
+  .row.assistant .bubble p:last-child { margin-bottom: 0; }
+
+  .row.assistant .bubble code {
+    background: rgba(0,0,0,0.06);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9em;
+  }
+
+  .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin-bottom: 6px;
+  }
+
+  .row.user .label { text-align: right; color: #6d7fa3; }
+
+  /* Citation footnote markers, in the manner of a pin-cite in a brief */
+
+  sup.cite {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--brass);
+    background: rgba(185, 141, 62, 0.14);
+    border: 1px solid rgba(185, 141, 62, 0.45);
+    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 1px;
+    line-height: 1;
+    top: -0.4em;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  sup.cite:hover, sup.cite:focus-visible {
+    background: var(--brass);
+    color: var(--ink);
+    outline: none;
+  }
+
+  .footnotes {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.12);
+  }
+
+  .footnotes ol {
+    margin: 0;
+    padding-left: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: #4a4738;
+  }
+
+  .footnotes li { margin-bottom: 3px; }
+
+  .flag {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 12.5px;
+    font-style: italic;
+    color: #6b5a3a;
+    border-left: 2px solid var(--brass);
+    padding-left: 8px;
+  }
+
+  .system-note .bubble {
+    background: transparent;
+    border: 1px dashed rgba(194, 84, 45, 0.5);
+    color: #e8b9a4;
+    font-size: 13.5px;
+  }
+
+  /* ---------- Typing indicator ---------- */
+
+  .typing .bubble {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    padding: 16px 18px;
+  }
+
+  .typing .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #a7a08c;
+    animation: bounce 1.1s infinite ease-in-out;
+  }
+
+  .typing .dot:nth-child(2) { animation-delay: 0.15s; }
+  .typing .dot:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* ---------- Input bar ---------- */
+
+  #composer {
+    flex: none;
+    padding: 18px 32px 24px;
+    background: var(--ink-2);
+    border-top: 1px solid var(--rule);
+  }
+
+  #form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--ink-3);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 8px 8px 8px 16px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  #form:focus-within {
+    border-color: var(--brass);
+    box-shadow: 0 0 0 3px rgba(185, 141, 62, 0.15);
+  }
+
+  #question {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-hi);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    resize: none;
+    max-height: 140px;
+    padding: 8px 0;
+  }
+
+  #question::placeholder { color: #5b6883; }
+
+  button#send {
+    flex: none;
+    background: var(--brass);
+    color: var(--ink);
+    border: none;
+    border-radius: 3px;
+    padding: 10px 18px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  button#send:hover:not(:disabled) { background: var(--brass-light); }
+  button#send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .composer-hint {
+    margin: 8px 2px 0;
+    font-size: 11px;
+    color: var(--text-lo);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ---------- Scrollbar ---------- */
+
+  #chat::-webkit-scrollbar { width: 9px; }
+  #chat::-webkit-scrollbar-track { background: transparent; }
+  #chat::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 5px; }
+
+  @media (max-width: 640px) {
+    header { padding: 18px 18px 14px; }
+    #chat { padding: 20px 16px 8px; }
+    #composer { padding: 14px 16px 18px; }
+    .bubble { max-width: 88vw; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="brand-mark">In re:</span>
+    <h1>Research Assistant</h1>
+  </div>
+  <p class="subtitle">Internal documentation &middot; grounded answers only</p>
+  <div class="rule"></div>
+</header>
+
+<main id="chat" aria-live="polite"></main>
+
+<div id="composer">
+  <form id="form">
+    <textarea
+      id="question"
+      rows="1"
+      placeholder="Ask about a matter, template, or filing..."
+      aria-label="Your question"
+    ></textarea>
+    <button id="send" type="submit">Ask</button>
+  </form>
+  <p class="composer-hint">Enter to send &middot; Shift+Enter for a new line</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+  // ---------------------------------------------------------------------
+  // Configuration
+  // ---------------------------------------------------------------------
+  // Replace with your n8n webhook URL:
+  //   Test mode (workflow open + "Listen for test event"):
+  //     https://<your-n8n-domain>/webhook-test/rag-query
+  //   Production (workflow activated):
+  //     https://<your-n8n-domain>/webhook/rag-query
+  const WEBHOOK_URL = "https://<your-n8n-domain>/webhook-test/rag-query";
+
+  const chat = document.getElementById("chat");
+  const form = document.getElementById("form");
+  const input = document.getElementById("question");
+  const sendBtn = document.getElementById("send");
+
+  marked.setOptions({ breaks: true });
+
+  // ---------------------------------------------------------------------
+  // Citation handling — render [Source: file, page X] as footnote pin-cites
+  // ---------------------------------------------------------------------
+
+  function extractCitations(rawText) {
+    const pattern = /\[Source:\s*([^,\]]+)(?:,\s*page\s*([^\]]+))?\]/gi;
+    const footnotes = [];
+    const seen = new Map();
+
+    const replaced = rawText.replace(pattern, (match, file, page) => {
+      const key = `${file.trim()}::${page ? page.trim() : ""}`;
+      let idx = seen.get(key);
+      if (!idx) {
+        idx = footnotes.length + 1;
+        seen.set(key, idx);
+        footnotes.push({ file: file.trim(), page: page ? page.trim() : null });
+      }
+      return `<sup class="cite" tabindex="0" title="${escapeAttr(file.trim())}${page ? ", p. " + escapeAttr(page.trim()) : ""}">${idx}</sup>`;
+    });
+
+    return { text: replaced, footnotes };
+  }
+
+  function escapeAttr(str) {
+    return str.replace(/"/g, "&quot;");
+  }
+
+  function renderFootnotes(footnotes) {
+    if (!footnotes.length) return "";
+    const items = footnotes
+      .map(f => `<li>${escapeAttr(f.file)}${f.page ? `, p. ${escapeAttr(f.page)}` : ""}</li>`)
+      .join("");
+    return `<div class="footnotes"><ol>${items}</ol></div>`;
+  }
+
+  // ---------------------------------------------------------------------
+  // Message rendering
+  // ---------------------------------------------------------------------
+
+  function addRow(role, { html, label } = {}) {
+    const row = document.createElement("div");
+    row.className = `row ${role}`;
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    if (label) {
+      const labelEl = document.createElement("div");
+      labelEl.className = "label";
+      labelEl.textContent = label;
+      bubble.appendChild(labelEl);
+    }
+
+    const body = document.createElement("div");
+    body.innerHTML = html;
+    bubble.appendChild(body);
+
+    row.appendChild(bubble);
+    chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+    return row;
+  }
+
+  function addUserMessage(text) {
+    const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    addRow("user", { html: `<p style="margin:0">${escaped}</p>`, label: "You" });
+  }
+
+  function addAssistantMessage(answer, { lowConfidence } = {}) {
+    const { text, footnotes } = extractCitations(answer);
+    const bodyHtml = marked.parse(text) + renderFootnotes(footnotes);
+    const row = addRow("assistant", { html: bodyHtml, label: "Research Assistant" });
+
+    if (lowConfidence) {
+      const flag = document.createElement("p");
+      flag.className = "flag";
+      flag.textContent = "Based on partial matches — verify against the source documents.";
+      row.querySelector(".bubble").appendChild(flag);
+    }
+  }
+
+  function addSystemNote(text) {
+    addRow("assistant", { html: `<p style="margin:0">${text}</p>` });
+    chat.lastElementChild.classList.add("system-note");
+  }
+
+  function addTypingIndicator() {
+    const row = document.createElement("div");
+    row.className = "row assistant typing";
+    row.innerHTML = `<div class="bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
+    chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+    return row;
+  }
+
+  // ---------------------------------------------------------------------
+  // Submission
+  // ---------------------------------------------------------------------
+
+  async function askQuestion(question) {
+    sendBtn.disabled = true;
+    input.disabled = true;
+    const typingRow = addTypingIndicator();
+
+    try {
+      const response = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+
+      typingRow.remove();
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const answer = data.answer ?? "No answer was returned.";
+      const alreadyFlagged = /Note: This answer is based on partial matches/i.test(answer);
+      const cleanAnswer = answer.replace(/\n*Note: This answer is based on partial matches\. Please verify with the source documents\.$/i, "");
+
+      addAssistantMessage(cleanAnswer, { lowConfidence: alreadyFlagged });
+    } catch (err) {
+      typingRow.remove();
+      addSystemNote(`Could not reach the research assistant. ${err.message}. Please try again.`);
+    } finally {
+      sendBtn.disabled = false;
+      input.disabled = false;
+      input.focus();
+    }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    addUserMessage(question);
+    input.value = "";
+    input.style.height = "auto";
+    askQuestion(question);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 140) + "px";
+  });
+
+  // Opening state
+  addAssistantMessage(
+    "Ask a question about the firm's internal documentation — templates, precedent, or filings — and I'll answer strictly from what's on file, with sources cited."
+  );
+  input.focus();
+</script>
+
+</body>
+</html>
