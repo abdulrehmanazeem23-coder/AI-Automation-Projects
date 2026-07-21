@@ -1,0 +1,99 @@
+{
+  "name": "RAG Webhook Endpoint",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "d2af96bb-ce2f-40fc-b8a4-69411428d5f1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://overuse-driving-brick.ngrok-free.dev/query",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"question\": $json.body.question } }}",
+        "options": {}
+      },
+      "id": "http_request_query",
+      "name": "Query RAG API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        528,
+        304
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond_webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Query RAG API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query RAG API": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "versionId": "fb659b3f-fd98-48e4-9932-759220df1f8c",
+  "meta": {
+    "instanceId": "55139cc83e6441c0f061e19bfc630d4fae43353c52f8cc097997b199b6415da9"
+  },
+  "nodeGroups": [],
+  "id": "mFpFqpMmw1OICrGy",
+  "tags": []
+}
